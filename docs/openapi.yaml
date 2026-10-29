@@ -5,6 +5,9 @@ info:
   description: |
     A minimal Go HTTP API deployed as one Vercel function per file and runnable
     on any host that can execute a binary. Every route lives under `/api`.
+    Successful JSON responses are wrapped as `{ "data": ... }`; failures use
+    `{ "error": { "code": ..., "message": ... } }`. The two documentation
+    endpoints serve raw HTML and YAML instead of the JSON envelope.
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -34,9 +37,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
               example:
-                status: ok
+                data:
+                  status: ok
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/hello:
     get:
@@ -63,9 +69,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/HelloResponse'
               example:
-                message: Hello, Go!
+                data:
+                  message: Hello, Go!
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/echo:
     post:
@@ -88,14 +97,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/EchoResponse'
               example:
-                message: ping
-                receivedAt: '2026-01-01T00:00:00Z'
+                data:
+                  message: ping
+                  receivedAt: '2026-01-01T00:00:00Z'
         '400':
           $ref: '#/components/responses/BadRequest'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/docs:
     get:
@@ -104,7 +116,8 @@ paths:
       summary: Swagger UI
       description: |
         HTML page that loads Swagger UI from a pinned CDN version and points it
-        at `/api/openapi.yaml`. `HEAD` is also accepted.
+        at `/api/openapi.yaml`. The response is raw HTML, not the JSON envelope.
+        `HEAD` is also accepted.
       responses:
         '200':
           description: HTML page loading Swagger UI from a pinned CDN version.
@@ -122,7 +135,8 @@ paths:
       summary: OpenAPI document
       description: |
         This document, served from the embedded copy so the spec and the
-        handlers never drift apart. `HEAD` is also accepted.
+        handlers never drift apart. The response is raw YAML, not the JSON
+        envelope. `HEAD` is also accepted.
       responses:
         '200':
           description: This document.
@@ -137,19 +151,29 @@ components:
   schemas:
     HealthResponse:
       type: object
-      required: [status]
+      description: Success envelope for the health endpoint.
+      required: [data]
       properties:
-        status:
-          type: string
-          example: ok
+        data:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              example: ok
 
     HelloResponse:
       type: object
-      required: [message]
+      description: Success envelope for the greeting endpoint.
+      required: [data]
       properties:
-        message:
-          type: string
-          example: Hello, World!
+        data:
+          type: object
+          required: [message]
+          properties:
+            message:
+              type: string
+              example: Hello, World!
 
     EchoRequest:
       type: object
@@ -163,18 +187,26 @@ components:
 
     EchoResponse:
       type: object
-      required: [message, receivedAt]
+      description: Success envelope for the echo endpoint.
+      required: [data]
       properties:
-        message:
-          type: string
-          example: ping
-        receivedAt:
-          type: string
-          format: date-time
-          example: '2026-01-01T00:00:00Z'
+        data:
+          type: object
+          required: [message, receivedAt]
+          properties:
+            message:
+              type: string
+              example: ping
+            receivedAt:
+              type: string
+              format: date-time
+              example: '2026-01-01T00:00:00Z'
 
     Error:
       type: object
+      description: |
+        Shared error envelope. A success response uses `{ "data": ... }` instead;
+        an error body never includes `data`.
       required: [error]
       properties:
         error:
@@ -183,6 +215,7 @@ components:
           properties:
             code:
               type: string
+              description: Stable value clients can branch on.
               example: invalid_request
             message:
               type: string
@@ -190,7 +223,7 @@ components:
 
   responses:
     BadRequest:
-      description: The body is not valid JSON, has unknown fields, or fails validation.
+      description: The query or body is missing, not valid JSON, has unknown fields, or fails validation.
       content:
         application/json:
           schema:
@@ -209,7 +242,7 @@ components:
           example:
             error:
               code: payload_too_large
-              message: body must be at most 1 KB
+              message: body must be at most 1024 bytes
 
     MethodNotAllowed:
       description: The path exists, but this method is not supported.
@@ -227,3 +260,16 @@ components:
             error:
               code: method_not_allowed
               message: POST is not allowed on /api/health
+
+    InternalError:
+      description: |
+        An unexpected failure. The cause is logged with the method and path and
+        never included in the response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: internal server error

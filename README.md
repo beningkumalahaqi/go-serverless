@@ -4,7 +4,7 @@ Live API docs: <https://go-serverless-api.vercel.app/api/docs/>
 
 A small Go HTTP API that deploys to Vercel as one function per file and runs unchanged on any host that can execute a binary.
 
-- Three example endpoints, a shared JSON error shape, and tests.
+- Three example endpoints, a shared success envelope and error shape, and tests.
 - An OpenAPI 3.0 spec and Swagger UI served by the app itself.
 - One Go file per endpoint, plus a local server that serves the same routes.
 
@@ -49,7 +49,7 @@ Stop the server with Ctrl+C.
 
 ```bash
 make test        # go vet + go test -race
-make portability # shared packages stay stdlib-only; only api/ may mention Vercel
+make portability # core/ and lib/ stay stdlib-only; only api/ may mention Vercel
 ```
 
 Both commands must pass before a change is done.
@@ -72,7 +72,24 @@ Errors use one shape:
 { "error": { "code": "invalid_request", "message": "message is required" } }
 ```
 
-Status codes: `200`, `400` for bad input, `404` for unknown routes, `405` with an `Allow` header for wrong methods, `413` for a body over 1 KB. Under `cmd/server`, unknown paths including `/` and `/api` return the JSON 404 shape. On Vercel, an unknown path never reaches a function, so the platform's HTML 404 is returned instead. Open `/api/docs` for the UI.
+Successful JSON responses use one shape too, with the payload under `data`:
+
+```json
+{ "data": { "status": "ok" } }
+```
+
+The two meta endpoints (`/api/docs` and `/api/openapi.yaml`) write their raw
+HTML and YAML instead of the envelope. Every JSON endpoint goes through
+`lib.Handle`, which applies the method guard, wraps success values, maps errors,
+and turns a panic into a 500.
+
+Status codes: `200` for success, `400` for bad input, `404` for unknown routes,
+`405` with an `Allow` header for wrong methods, `413` for a body over 1 KB, and
+`500` for an unexpected failure. The 500 body never includes the internal cause;
+the cause is logged as JSON on stdout. Under `cmd/server`, unknown paths
+including `/` and `/api` return the JSON 404 shape. On Vercel, an unknown path
+never reaches a function, so the platform's HTML 404 is returned instead. Open
+`/api/docs` for the UI.
 
 ## Deploy to Vercel
 
@@ -102,7 +119,7 @@ Smoke test a deployment:
 BASE_URL=https://your-project.vercel.app ./examples/curl.sh
 ```
 
-The script checks the greeting and the echo timestamp, not just status codes.
+The script checks the response envelopes, the echo timestamp, and the error code, not just status codes.
 
 `make dev` runs `vercel dev` to test the real per-file functions locally. Run `vercel link` once first. The plain `go run` loop is faster and is the primary workflow, but both are worth running when you change routing.
 
@@ -112,7 +129,8 @@ The script checks the greeting and the echo timestamp, not just status codes.
 .
 ├── api/                      One function per file, plus its init registration
 ├── cmd/server/main.go        Local and non-Vercel entrypoint
-├── core/                     Registry, response helpers, logging, tests
+├── core/                     Route registry, router, logging, tests
+├── lib/                      Request decoder, success envelope, errors, handler adapter
 ├── docs/                     OpenAPI spec, Swagger UI page, guides
 ├── examples/                 HTTP and curl requests
 ├── vercel.json               framework: null, so Vercel builds the files in api/
@@ -120,7 +138,7 @@ The script checks the greeting and the echo timestamp, not just status codes.
 └── go.mod
 ```
 
-Only `vercel.json` and the file-per-function layout of `api/` are specific to Vercel. The handlers, `core/`, and `docs/` do not know which host runs them. `cmd/server` serves the same handlers from a normal `net/http` server.
+Only `vercel.json` and the file-per-function layout of `api/` are specific to Vercel. The handlers, `core/`, `lib/`, and `docs/` do not know which host runs them. `cmd/server` serves the same handlers from a normal `net/http` server.
 
 ## Configuration
 
@@ -131,7 +149,9 @@ Only `vercel.json` and the file-per-function layout of `api/` are specific to Ve
 
 Vercel functions do not listen on a port. They receive a request and write a response. `PORT` matters only when you run the binary yourself.
 
-Logs are JSON on stdout. Set env vars in the Vercel dashboard for deployments.
+Logs are JSON on stdout. A 5xx response logs the method, path, error code, and
+cause; the response body stays generic. Set env vars in the Vercel dashboard for
+deployments.
 
 ## Use it as a template
 
@@ -167,11 +187,11 @@ See [docs/portability.md](docs/portability.md). Docker, Fly.io, Render, Cloud Ru
 | A new file does not appear on Vercel | Each `api/*.go` file must declare `package handler` and export exactly one function with the `http.HandlerFunc` signature. Redeploy after adding it. |
 | Build cannot find the module | `go.mod` must sit at the repository root. |
 | `/api/missing` returns HTML instead of the JSON error shape | Vercel answers unknown paths before a function runs. Only `cmd/server` has a JSON catch-all. |
-| `vercel dev` returns 502 `NO_RESPONSE_FROM_FUNCTION` | The function failed to build. Read the terminal output. A common cause is an `internal/` import from `api/`, because Vercel rewrites the module to `handler`. |
+| `vercel dev` returns 502 `NO_RESPONSE_FROM_FUNCTION` | The function failed to build, or it panicked outside `lib.Handle` (for example in `init`). Read the terminal output. A common build failure is an `internal/` import from `api/`, because Vercel rewrites the module to `handler`. |
 | `/api/docs` is blank | Swagger UI loads from jsDelivr and needs internet access. Vendor `swagger-ui-dist` into `docs/` if the page must work offline. |
 | `/api/docs` renders but Try it out fails | The spec loads from `/api/openapi.yaml`. Check that the deployment serves that path and that the browser can reach the deployment URL. |
 | Vercel rejects the Go version | Lower the `go` directive in `go.mod` to a version Vercel supports, such as 1.25. |
-| `make portability` fails | Something in `api/`, `core/`, or `docs/` grew a third-party import, or a Go file outside `api/` mentions Vercel. Move host-specific code out of the core. |
+| `make portability` fails | Something in `api/`, `core/`, `lib/`, or `docs/` grew a third-party import, or a Go file outside `api/` mentions Vercel. Move host-specific code out of `core/` and `lib/`. |
 
 ## Documentation
 

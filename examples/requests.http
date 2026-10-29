@@ -1,6 +1,7 @@
 @host = http://localhost:8080
 
 ### Health
+# Success bodies use the data envelope: {"data":{"status":"ok"}}
 GET {{host}}/api/health
 
 ### Hello with the default name
@@ -16,6 +17,7 @@ Content-Type: application/json
 {"message": "ping"}
 
 ### Error shape: missing message
+# Errors use {"error":{"code":"invalid_request","message":"..."}}
 POST {{host}}/api/echo
 Content-Type: application/json
 
@@ -24,8 +26,8 @@ Content-Type: application/json
 ### Error shape: unknown route
 GET {{host}}/missing
 
-### OpenAPI document
+### OpenAPI document (raw YAML, no envelope)
 GET {{host}}/api/openapi.yaml
 
-### Swagger UI (open in a browser)
+### Swagger UI (raw HTML, no envelope; open in a browser)
 GET {{host}}/api/docs

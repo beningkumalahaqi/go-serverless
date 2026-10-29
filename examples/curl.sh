@@ -15,17 +15,21 @@ expect() {
 }
 
 body=$(curl -fsS "$BASE_URL/api/health")
-expect health "$body" '"status":"ok"'
+expect health "$body" '"data":{"status":"ok"}'
 
 body=$(curl -fsS "$BASE_URL/api/hello?name=Go")
-expect hello "$body" '"message":"Hello, Go!"'
+expect hello "$body" '"data":{"message":"Hello, Go!"}'
 
 body=$(curl -fsS -X POST -H 'Content-Type: application/json' -d '{"message":"ping"}' "$BASE_URL/api/echo")
-expect echo "$body" '"message":"ping"'
+expect echo "$body" '"data":{"message":"ping"'
 expect echo-timestamp "$body" '"receivedAt":"'
 
-status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "$BASE_URL/api/echo")
+response=$(curl -sS -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "$BASE_URL/api/echo")
+body=${response%$'\n'*}
+status=${response##*$'\n'}
 [ "$status" = "400" ] || { echo "expected 400, got $status"; exit 1; }
+expect error-code "$body" '"code":"invalid_request"'
+expect error-shape "$body" '"error":{'
 echo "error shape: ok"
 
 curl -fsS "$BASE_URL/api/openapi.yaml" >/dev/null

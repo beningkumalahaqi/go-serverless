@@ -5,7 +5,8 @@ Only `vercel.json` and the file-per-function layout of `api/` know about Vercel.
 | File | Role |
 |---|---|
 | `api/` | One handler per file; compiled into `cmd/server` too |
-| `core/` | Registry, response helpers, middleware, tests |
+| `core/` | Registry, router, logging, tests |
+| `lib/` | Request decoder, success envelope, error type, handler adapter |
 | `cmd/server` | Reads `PORT`, serves the router |
 | `docs/` | Embedded spec and Swagger UI |
 | `examples/`, `Makefile` | Local workflow |
@@ -55,7 +56,7 @@ PORT=8080 ./bin/server
 
 ## AWS Lambda
 
-Lambda needs one adapter file and two dependencies that stay out of the core. Add `cmd/lambda/main.go`:
+Lambda needs one adapter file and two dependencies that stay out of the shared packages. Add `cmd/lambda/main.go`:
 
 ```go
 package main
@@ -87,7 +88,7 @@ Deploy with AWS SAM using the `provided.al2023` runtime and an HTTP API (payload
 
 Check the current `httpadapter` constructor name before copying the snippet; the library has changed it across releases. If you would rather avoid the dependency, a payload v2 adapter is roughly 40 lines and needs no third-party packages.
 
-The `make portability` guard checks two things: `api/`, `core/`, and `docs/` must not import third-party modules, and no Go file outside `api/` may mention Vercel. The Lambda adapter lives in `cmd/lambda`, so its dependencies never reach the shared packages.
+The `make portability` guard checks two things: `api/`, `core/`, `lib/`, and `docs/` must not import third-party modules, and no Go file outside `api/` may mention Vercel. The Lambda adapter lives in `cmd/lambda`, so its dependencies never reach the shared packages.
 
 ## Host checklist
 
