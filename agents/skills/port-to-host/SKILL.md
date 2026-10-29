@@ -5,7 +5,9 @@ description: Move this API from Vercel to Docker, Fly.io, Render, Cloud Run, Rai
 
 # Port to another host
 
-The router and handlers in `internal/api` know nothing about Vercel. Only `vercel.json` is host-specific. `cmd/server` reads `PORT`, binds `:PORT`, and serves every route under `/api`.
+The handlers in `api/` and the registry in `core/` know nothing about Vercel. Only `vercel.json` and the file-per-function layout are host-specific. `cmd/server` reads `PORT`, binds `:PORT`, blank-imports `api/`, and serves every registered route under `/api`.
+
+Other hosts use the server, not the per-file functions. The `api/` files still compile and register; Vercel simply happens to call them one by one.
 
 ## Checklist
 
@@ -59,7 +61,7 @@ PORT=8080 ./bin/server
 
 ## AWS Lambda
 
-Lambda needs an adapter and two dependencies. Keep both out of `internal/`. Add `cmd/lambda/main.go`:
+Lambda needs an adapter and two dependencies. Keep both out of `core/`. Add `cmd/lambda/main.go`:
 
 ```go
 package main
@@ -68,11 +70,11 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
-	"github.com/haqi/go-serverless/internal/api"
+	"haqi/go-serverless/core"
 )
 
 func main() {
-	lambda.Start(httpadapter.NewV2(api.NewRouter()).ProxyWithContext)
+	lambda.Start(httpadapter.NewV2(core.NewRouter()).ProxyWithContext)
 }
 ```
 
@@ -83,7 +85,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o bootstrap .
 
 Deploy with AWS SAM using `provided.al2023`, `arm64`, and an HTTP API with payload v2. Add `ANY /{proxy+}` and `ANY /` routes. Check the current `httpadapter` constructor name before copying the snippet.
 
-The `make portability` guard still passes because it checks dependencies under `internal/` and `docs/`, and forbids Vercel references in Go files.
+The `make portability` guard still passes because it checks dependencies under `api/`, `core/`, and `docs/`, and forbids Vercel references in Go files outside `api/`.
 
 ## Verify
 
@@ -95,7 +97,8 @@ The script checks `/api/health`, `/api/hello?name=Go`, `/api/echo`, the 400 erro
 
 ## Rules
 
-- Put host-specific code in a new `cmd/<name>` directory, never in `internal/`.
-- Do not add a third-party dependency to `internal/` or `docs/`.
+- Put host-specific code in a new `cmd/<name>` directory, never in `core/`.
+- Do not add a third-party dependency to `api/`, `core/`, or `docs/`.
+- Anything imported by `api/` must stay outside `internal/` so Vercel's module rewrite can still import it.
 - Do not change route paths during a move. Clients and the OpenAPI spec expect the `/api` prefix.
 - If the new host cannot serve the CDN, vendor `swagger-ui-dist` into `docs/` and update `docs/index.html`.
