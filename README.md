@@ -1,5 +1,7 @@
 # Go Serverless API
 
+Live API docs: <https://go-serverless-api.vercel.app/api/docs/>
+
 A small Go HTTP API that deploys to Vercel as one function per file and runs unchanged on any host that can execute a binary.
 
 - Three example endpoints, a shared JSON error shape, and tests.
