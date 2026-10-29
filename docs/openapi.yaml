@@ -4,8 +4,7 @@ info:
   version: 0.1.0
   description: |
     A minimal Go HTTP API that runs locally, on Vercel, and on any host that
-    can run a binary. The spec is written by hand and is the source of truth
-    for the routes in internal/api.
+    can run a binary.
 servers:
   - url: /
 security: []
