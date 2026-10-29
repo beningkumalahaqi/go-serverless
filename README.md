@@ -72,7 +72,7 @@ Status codes: `200`, `400` for bad input, `404` for unknown routes, `405` with a
 
 ## Deploy to Vercel
 
-The default setup builds `api/index.go` as one Vercel Function. Every path is rewritten to that function, and the router handles the rest.
+The default setup builds `api/index.go` as one Vercel Function. A route sends every path to that function and restores the path it observes, so `/health` reaches the router as `/health`.
 
 Vercel's Go runtime is in beta. Check the [Go runtime docs](https://vercel.com/docs/functions/runtimes/go) before relying on it for production traffic.
 
@@ -93,6 +93,8 @@ Smoke test a deployment:
 ```bash
 BASE_URL=https://your-project.vercel.app ./examples/curl.sh
 ```
+
+Local `go run` has no Vercel routing in front of it, so deployed paths can fail while local requests work. Run this script against the deployment after any `vercel.json` change; it checks the greeting and the echo timestamp, not just the status code.
 
 `make dev` runs `vercel dev` if you want to test against the local Vercel emulator. The plain `go run` loop is faster and is the primary workflow.
 
@@ -156,7 +158,7 @@ See [docs/portability.md](docs/portability.md). Docker, Fly.io, Render, Cloud Ru
 
 | Symptom | Cause and fix |
 |---|---|
-| Every path returns 404 after deploy | The rewrite is missing from `vercel.json`, or the function receives a path it does not recognize. Check the rewrite, then read the path note in `api/index.go`. |
+| Every path returns 404 after deploy | The function is seeing `/api` instead of the original path. Check the `routes` transform in `vercel.json`; if transforms are unavailable, switch to Go server mode. |
 | Build cannot find the module | `go.mod` must sit at the repository root. |
 | `/docs` is blank | Swagger UI loads from jsDelivr and needs internet access. Vendor `swagger-ui-dist` into `docs/` if the page must work offline. |
 | Vercel rejects the Go version | Lower the `go` directive in `go.mod` to a version Vercel supports, such as 1.25. |

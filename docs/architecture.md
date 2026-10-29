@@ -39,9 +39,19 @@ Logging. `internal/api/logging.go` configures `slog` JSON output once, when the 
 
 ## Path handling on Vercel
 
-The rewrite in `vercel.json` sends every request to `/api`. Depending on how Vercel forwards the request, the function can see either the original path (`/health`) or the rewritten one (`/api/health`). `api/index.go` strips a leading `/api` before calling the router, so both forms work.
+A plain rewrite to `/api` does not preserve the original path: the function sees `/api` for every request. `vercel.json` therefore uses a route with a `request.path` transform:
 
-This is the one host-specific detail in the code. It lives in the adapter, and the fallback is documented in the README: switch to Go server mode and delete `api/`.
+```json
+{
+  "src": "^/(.*)$",
+  "dest": "/api",
+  "transforms": [{ "type": "request.path", "op": "set", "args": "/$1" }]
+}
+```
+
+The route selects the function, and the transform sets the path the function observes back to the captured path. `/hello?name=Go` reaches the router as `/hello` with the query string intact. This keeps `api/index.go` a plain adapter with no path logic.
+
+If the transform is unavailable in your Vercel account, use Go server mode instead (delete `api/` and set `framework: "go"`). The router code does not change.
 
 ## Failure behavior
 
