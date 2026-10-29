@@ -1,15 +1,16 @@
 # Portability
 
-Only `vercel.json` knows about Vercel. Everything else is a normal Go HTTP server:
+Only `vercel.json` and the file-per-function layout of `api/` know about Vercel. The rest is a normal Go HTTP server:
 
 | File | Role |
 |---|---|
-| `internal/api` | Router, handlers, middleware, tests |
+| `api/` | One handler per file; compiled into `cmd/server` too |
+| `core/` | Registry, response helpers, middleware, tests |
 | `cmd/server` | Reads `PORT`, serves the router |
 | `docs/` | Embedded spec and Swagger UI |
 | `examples/`, `Makefile` | Local workflow |
 
-Delete `vercel.json` and the rest runs anywhere Go runs. The recipes below are starting points; the Docker and Lambda snippets are not exercised by this repository's tests.
+Delete `vercel.json` and the rest runs anywhere Go runs. `cmd/server` blank-imports `api/`, so every handler still registers and the same URLs are served. Vercel functions never bind a port; every host below uses the server instead. The recipes are starting points; the Docker and Lambda snippets are not exercised by this repository's tests.
 
 ## Docker
 
@@ -63,11 +64,11 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
-	"github.com/haqi/go-serverless/internal/api"
+	"haqi/go-serverless/core"
 )
 
 func main() {
-	lambda.Start(httpadapter.NewV2(api.NewRouter()).ProxyWithContext)
+	lambda.Start(httpadapter.NewV2(core.NewRouter()).ProxyWithContext)
 }
 ```
 
@@ -86,7 +87,7 @@ Deploy with AWS SAM using the `provided.al2023` runtime and an HTTP API (payload
 
 Check the current `httpadapter` constructor name before copying the snippet; the library has changed it across releases. If you would rather avoid the dependency, a payload v2 adapter is roughly 40 lines and needs no third-party packages.
 
-The `make portability` guard checks two things: core packages must not import third-party modules, and no Go file may mention Vercel. The Lambda adapter lives in `cmd/lambda`, so its dependencies never reach `internal/` or `docs/`.
+The `make portability` guard checks two things: `api/`, `core/`, and `docs/` must not import third-party modules, and no Go file outside `api/` may mention Vercel. The Lambda adapter lives in `cmd/lambda`, so its dependencies never reach the shared packages.
 
 ## Host checklist
 

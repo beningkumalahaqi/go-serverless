@@ -3,8 +3,8 @@ info:
   title: Go Serverless API
   version: 0.1.0
   description: |
-    A minimal Go HTTP API that runs locally, on Vercel, and on any host that
-    can run a binary. Every route lives under `/api`.
+    A minimal Go HTTP API deployed as one Vercel function per file and runnable
+    on any host that can execute a binary. Every route lives under `/api`.
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -24,7 +24,7 @@ paths:
       operationId: getHealth
       summary: Liveness check
       description: |
-        Reports that the process is up. Used by platform health checks.
+        Reports that the function is up. Used by platform health checks.
         `HEAD` is also accepted.
       responses:
         '200':
@@ -121,8 +121,8 @@ paths:
       operationId: getOpenAPISpec
       summary: OpenAPI document
       description: |
-        This document, served from the embedded copy so the spec and the binary
-        never drift apart. `HEAD` is also accepted.
+        This document, served from the embedded copy so the spec and the
+        handlers never drift apart. `HEAD` is also accepted.
       responses:
         '200':
           description: This document.
