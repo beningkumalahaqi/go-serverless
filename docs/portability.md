@@ -1,15 +1,15 @@
 # Portability
 
-Only two things know about Vercel:
+Only `vercel.json` knows about Vercel. Everything else is a normal Go HTTP server:
 
-| Coupled to Vercel | Portable |
+| File | Role |
 |---|---|
-| `api/index.go` | `internal/api` router and handlers |
-| `vercel.json` | `cmd/server` |
-| `docs/` served through the app | `docs/` content |
-| | tests, examples, Makefile |
+| `internal/api` | Router, handlers, middleware, tests |
+| `cmd/server` | Reads `PORT`, serves the router |
+| `docs/` | Embedded spec and Swagger UI |
+| `examples/`, `Makefile` | Local workflow |
 
-Delete `api/` and `vercel.json` and the rest is a normal Go HTTP server. The recipes below are starting points; the Docker and Lambda snippets are not exercised by this repository's tests.
+Delete `vercel.json` and the rest runs anywhere Go runs. The recipes below are starting points; the Docker and Lambda snippets are not exercised by this repository's tests.
 
 ## Docker
 
@@ -86,13 +86,13 @@ Deploy with AWS SAM using the `provided.al2023` runtime and an HTTP API (payload
 
 Check the current `httpadapter` constructor name before copying the snippet; the library has changed it across releases. If you would rather avoid the dependency, a payload v2 adapter is roughly 40 lines and needs no third-party packages.
 
-The `make portability` guard still passes because the Vercel check only inspects Go files, and the dependency check only covers `internal/` and `docs/`.
+The `make portability` guard checks two things: core packages must not import third-party modules, and no Go file may mention Vercel. The Lambda adapter lives in `cmd/lambda`, so its dependencies never reach `internal/` or `docs/`.
 
 ## Host checklist
 
 When moving:
 
-1. Delete or ignore `api/` and `vercel.json`.
+1. Delete or ignore `vercel.json`.
 2. Build `./cmd/server` for the target OS and architecture.
 3. Set `PORT` if the platform requires a specific value.
 4. Set `LOG_LEVEL` if you need more or less log volume.

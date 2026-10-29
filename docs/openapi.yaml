@@ -5,6 +5,9 @@ info:
   description: |
     A minimal Go HTTP API that runs locally, on Vercel, and on any host that
     can run a binary.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
 servers:
   - url: /
 security: []
@@ -20,6 +23,9 @@ paths:
       tags: [examples]
       operationId: getHealth
       summary: Liveness check
+      description: |
+        Reports that the process is up. Used by platform health checks.
+        `HEAD` is also accepted.
       responses:
         '200':
           description: Service is up.
@@ -29,12 +35,17 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
               example:
                 status: ok
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /hello:
     get:
       tags: [examples]
       operationId: getHello
       summary: Greet a name from the query string
+      description: |
+        Returns a greeting. A blank `name` falls back to `World`.
+        `HEAD` is also accepted.
       parameters:
         - name: name
           in: query
@@ -53,6 +64,8 @@ paths:
                 $ref: '#/components/schemas/HelloResponse'
               example:
                 message: Hello, Go!
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /echo:
     post:
@@ -81,12 +94,17 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /docs:
     get:
       tags: [meta]
       operationId: getDocs
       summary: Swagger UI
+      description: |
+        HTML page that loads Swagger UI from a pinned CDN version and points it
+        at `/openapi.yaml`. `HEAD` is also accepted.
       responses:
         '200':
           description: HTML page loading Swagger UI from a pinned CDN version.
@@ -94,12 +112,17 @@ paths:
             text/html:
               schema:
                 type: string
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /openapi.yaml:
     get:
       tags: [meta]
       operationId: getOpenAPISpec
       summary: OpenAPI document
+      description: |
+        This document, served from the embedded copy so the spec and the binary
+        never drift apart. `HEAD` is also accepted.
       responses:
         '200':
           description: This document.
@@ -107,6 +130,8 @@ paths:
             application/yaml:
               schema:
                 type: string
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
 components:
   schemas:
@@ -185,3 +210,20 @@ components:
             error:
               code: payload_too_large
               message: body must be at most 1 KB
+
+    MethodNotAllowed:
+      description: The path exists, but this method is not supported.
+      headers:
+        Allow:
+          description: Methods accepted on this path.
+          schema:
+            type: string
+          example: GET, HEAD
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: method_not_allowed
+              message: POST is not allowed on /health

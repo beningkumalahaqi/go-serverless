@@ -54,6 +54,8 @@ Add the path to `docs/openapi.yaml`:
                 $ref: '#/components/schemas/ItemResponse'
               example:
                 id: abc123
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 ```
 
 Add the schema under `components/schemas`:
@@ -86,10 +88,11 @@ Add a failure case too, such as a wrong method returning 405, if the route intro
 
 ## 5. Examples
 
-Add the request to `examples/requests.http` and `examples/curl.sh`:
+Add the request to `examples/requests.http`. In `examples/curl.sh`, use the `expect` helper so the check covers the body, not just a 2xx status:
 
 ```bash
-curl -fsS "$BASE_URL/items/abc123"
+body=$(curl -fsS "$BASE_URL/items/abc123")
+expect item "$body" '"id":"abc123"'
 ```
 
 ## 6. Run
@@ -107,7 +110,8 @@ Run through this before opening a pull request:
 
 - Every route in `router.go` has a path in `openapi.yaml`.
 - Method, path parameters, query parameters, and request bodies match the handler.
-- Every status code the handler can return is documented.
+- Every status code the handler can return is documented, including `405` where the path rejects other methods.
+- Shared responses such as `MethodNotAllowed` are reused instead of copied.
 - Schemas cover required fields and constraints such as `maxLength`.
 - Examples use real values the handler accepts.
 - Tests cover the happy path and each error response.
@@ -118,10 +122,10 @@ This project does not implement these, but each has an obvious home:
 
 | Need | Where | Notes |
 |---|---|---|
-| Auth | Middleware in `internal/api` wrapping the mux in `NewRouter` | Both adapters get it automatically |
+| Auth | Middleware in `internal/api` wrapping the mux in `NewRouter` | Every host gets it automatically |
 | Database | `internal/store` | Keep SQL and drivers out of handlers; pass a store into `NewRouter` when the signature needs it |
 | Config | `internal/config` | Read env vars at startup, not inside handlers |
-| More functions | New file in `api/` and/or `cmd/<name>` | Share code through `internal/` |
+| More entrypoints | New `cmd/<name>` directory | Share code through `internal/` |
 | Environments | Vercel dashboard env vars | Preview and production have separate values |
 | CI | `.github/workflows/ci.yml` | Run `make test` and `make portability`; leave deploys to Vercel's Git integration |
 | Observability | Middleware around the mux | `slog` already emits JSON; add spans or request IDs there |

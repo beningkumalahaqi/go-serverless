@@ -1,13 +1,14 @@
 # Architecture
 
-The project is a portable `http.Handler` with two thin entrypoints.
+The project is a portable `http.Handler` reached through one entrypoint, `cmd/server`.
 
 ```mermaid
 flowchart LR
-  C[Client] --> V[Vercel edge and rewrite]
-  V --> F["api/index.go Handler"]
-  F --> R["internal/api.NewRouter"]
-  S["cmd/server (any host)"] --> R
+  C[Client] --> V[Vercel]
+  C --> L["Local go run"]
+  V --> S["cmd/server"]
+  L --> S
+  S --> R["internal/api.NewRouter"]
   R --> H[handlers]
   R --> D[embedded docs]
 ```
@@ -16,43 +17,31 @@ flowchart LR
 
 | Layer | Files | Responsibility |
 |---|---|---|
-| Adapters | `api/index.go`, `cmd/server/main.go` | Translate a host's entrypoint into a call to the router |
+| Entrypoint | `cmd/server/main.go` | Read `PORT`, start `net/http` |
 | Router | `internal/api/router.go` | Methods, paths, 404 and 405 responses |
 | Handlers | `internal/api/handlers.go` | Request parsing, validation, JSON responses |
 | Docs | `docs/` | OpenAPI spec, Swagger UI page, embedded files |
 
-Adapters contain no route logic. Both call `api.NewRouter()`, so a route added in one place appears on every host.
+Vercel builds `cmd/server` directly. There is no host adapter to keep in sync.
 
 ## Decisions
 
 Standard library only. Go 1.22 added method and path patterns to `ServeMux`, which covers everything these routes need. A router dependency would add a supply chain and a second API for no gain.
 
-One Vercel Function. `api/index.go` serves every route behind a rewrite. This keeps the handler portable and gives one cold start path. Vercel turns each Go file in `api/` into a separate function, so shared code lives in `internal/`, never beside the adapter.
+Server mode on Vercel. The Go framework preset builds `cmd/server` and runs it on `PORT`. A per-file `/api` function needs a rewrite that replaces the original path with `/api`, which then needs a host-specific path transform to recover. Running the server keeps paths native and matches every other host in this repository.
 
 Spec first. `docs/openapi.yaml` is written by hand and served by the app. The Swagger UI page loads a pinned `swagger-ui-dist` from jsDelivr. No generator means no build step and no generated files to review.
 
-Logging. `internal/api/logging.go` configures `slog` JSON output once, when the package is imported. That covers `cmd/server` and the function adapter, which has no `main`.
+Logging. `internal/api/logging.go` configures `slog` JSON output once, when the package is imported. `cmd/server` is the only entrypoint, so one configuration covers every host.
 
 ## Documentation page
 
 `/docs` is stock Swagger UI with no custom layout and no motion. Its job is to exercise the API, not to market it, so the design dials are ENERGY 1 / RHYTHM 1 / MOTION 1. The only customization is the page title, the spec URL, and two color rules that darken the version badges to meet WCAG AA contrast.
 
-## Path handling on Vercel
-
-A plain rewrite to `/api` does not preserve the original path: the function sees `/api` for every request. `vercel.json` therefore uses a route with a `request.path` transform:
-
-```json
-{
-  "src": "^/(.*)$",
-  "dest": "/api",
-  "transforms": [{ "type": "request.path", "op": "set", "args": "/$1" }]
-}
-```
-
-The route selects the function, and the transform sets the path the function observes back to the captured path. `/hello?name=Go` reaches the router as `/hello` with the query string intact. This keeps `api/index.go` a plain adapter with no path logic.
-
-If the transform is unavailable in your Vercel account, use Go server mode instead (delete `api/` and set `framework: "go"`). The router code does not change.
-
 ## Failure behavior
 
-Handlers return the shared error shape for bad input. Unknown paths return JSON 404. Wrong methods return 405 with an `Allow` header, implemented with bare path patterns because a catch-all `/` would otherwise swallow those requests into 404. Unexpected failures surface through the platform; there is no panic recovery middleware in this boilerplate.
+Handlers return the shared error shape for bad input. Unknown paths return JSON 404, including `/`. Wrong methods return 405 with an `Allow` header, implemented with bare path patterns because a catch-all `/` would otherwise swallow those requests into 404. `GET` routes also answer `HEAD`. The OpenAPI document lists 400, 405, and 413 where they apply. Unexpected failures surface through the platform; there is no panic recovery middleware in this boilerplate.
+
+## Host behavior
+
+The router reads only the request method, path, query string, and body. It does not inspect host headers, so a query string reaches the handler unchanged on every platform. `cmd/server` binds `:PORT`, which is what Vercel, Docker, and the other recipes in [portability.md](portability.md) expect.
