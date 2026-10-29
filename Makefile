@@ -24,5 +24,5 @@ deploy: ## production deployment
 	vercel deploy --prod
 
 portability: ## core must stay stdlib-only and Vercel-free
-	@! go list -deps ./internal/... ./docs/... | grep -v '^$(MODULE)' | grep -E '^[^/]+\.[^/]+/' || (echo "third-party dependency found in core" && exit 1)
-	@! grep -rIl --include='*.go' -i 'vercel' . || (echo "vercel reference in Go code" && exit 1)
+	@! go list -deps ./api/... ./core/... ./docs/... | grep -v '^$(MODULE)' | grep -E '^[^/]+\.[^/]+/' || (echo "third-party dependency found in core" && exit 1)
+	@! grep -rIl --include='*.go' -i 'vercel' . | grep -v '^\./api/' | grep -v '^\./\.vercel/' || (echo "vercel reference in Go code" && exit 1)

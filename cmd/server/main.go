@@ -7,7 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/haqi/go-serverless/internal/api"
+	_ "haqi/go-serverless/api"
+	"haqi/go-serverless/core"
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           api.NewRouter(),
+		Handler:           core.NewRouter(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -1,4 +1,4 @@
-package api
+package core_test
 
 import (
 	"encoding/json"
@@ -7,7 +7,23 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	handler "haqi/go-serverless/api"
+	core "haqi/go-serverless/core"
 )
+
+type errorBody struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+type echoResponse struct {
+	Message    string    `json:"message"`
+	ReceivedAt time.Time `json:"receivedAt"`
+}
 
 func TestRoutes(t *testing.T) {
 	largeBody := `{"message":"` + strings.Repeat("a", 2000) + `"}`
@@ -158,7 +174,7 @@ func TestRoutes(t *testing.T) {
 		},
 	}
 
-	router := NewRouter()
+	router := core.NewRouter()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var body io.Reader
@@ -197,10 +213,50 @@ func TestRoutes(t *testing.T) {
 	}
 }
 
+// A deployed function receives every method sent to its path, so each handler
+// must reject the wrong method itself.
+func TestHandlersGuardMethods(t *testing.T) {
+	tests := []struct {
+		name   string
+		fn     http.HandlerFunc
+		method string
+		allow  string
+	}{
+		{"health", handler.Health, http.MethodPost, "GET, HEAD"},
+		{"hello", handler.Hello, http.MethodPost, "GET, HEAD"},
+		{"echo", handler.Echo, http.MethodGet, "POST"},
+		{"docs", handler.Docs, http.MethodPost, "GET, HEAD"},
+		{"openapi", handler.OpenAPI, http.MethodPost, "GET, HEAD"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(tt.method, "/api/"+tt.name, nil)
+
+			tt.fn(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+			}
+			if got := rec.Header().Get("Allow"); got != tt.allow {
+				t.Errorf("Allow = %q, want %q", got, tt.allow)
+			}
+			var got errorBody
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode error body: %v", err)
+			}
+			if got.Error.Code != "method_not_allowed" {
+				t.Errorf("error code = %q, want method_not_allowed", got.Error.Code)
+			}
+		})
+	}
+}
+
 func TestEchoTimestampIsUTC(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader(`{"message":"ping"}`))
-	NewRouter().ServeHTTP(rec, req)
+	core.NewRouter().ServeHTTP(rec, req)
 
 	var got echoResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
@@ -216,7 +272,7 @@ func TestDocsContentTypes(t *testing.T) {
 		"/api/docs":         "text/html; charset=utf-8",
 		"/api/openapi.yaml": "application/yaml; charset=utf-8",
 	}
-	router := NewRouter()
+	router := core.NewRouter()
 	for path, want := range tests {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
