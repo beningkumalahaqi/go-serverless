@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	core "haqi/go-serverless/core"
+	"haqi/go-serverless/lib"
 )
 
 func init() {
@@ -16,8 +17,9 @@ type healthResponse struct {
 
 // Health reports that the endpoint is running.
 func Health(w http.ResponseWriter, r *http.Request) {
-	if !core.Allow(w, r, http.MethodGet, http.MethodHead) {
-		return
-	}
-	core.WriteJSON(w, http.StatusOK, healthResponse{Status: "ok"})
+	lib.Handle(w, r, health, http.MethodGet, http.MethodHead)
+}
+
+func health(*http.Request) (any, error) {
+	return healthResponse{Status: "ok"}, nil
 }

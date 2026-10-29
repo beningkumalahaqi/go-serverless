@@ -43,28 +43,28 @@ func TestRoutes(t *testing.T) {
 			method:       http.MethodGet,
 			path:         "/api/health",
 			wantStatus:   http.StatusOK,
-			wantContains: `"status":"ok"`,
+			wantContains: `"data":{"status":"ok"}`,
 		},
 		{
 			name:         "hello defaults to World",
 			method:       http.MethodGet,
 			path:         "/api/hello",
 			wantStatus:   http.StatusOK,
-			wantContains: `"message":"Hello, World!"`,
+			wantContains: `"data":{"message":"Hello, World!"}`,
 		},
 		{
 			name:         "hello uses the name parameter",
 			method:       http.MethodGet,
 			path:         "/api/hello?name=Go",
 			wantStatus:   http.StatusOK,
-			wantContains: `"message":"Hello, Go!"`,
+			wantContains: `"data":{"message":"Hello, Go!"}`,
 		},
 		{
 			name:         "hello with an empty name falls back",
 			method:       http.MethodGet,
 			path:         "/api/hello?name=",
 			wantStatus:   http.StatusOK,
-			wantContains: `"message":"Hello, World!"`,
+			wantContains: `"data":{"message":"Hello, World!"}`,
 		},
 		{
 			name:         "echo",
@@ -72,7 +72,7 @@ func TestRoutes(t *testing.T) {
 			path:         "/api/echo",
 			body:         `{"message":"ping"}`,
 			wantStatus:   http.StatusOK,
-			wantContains: `"message":"ping","receivedAt":"`,
+			wantContains: `"data":{"message":"ping","receivedAt":"`,
 		},
 		{
 			name:          "echo rejects malformed JSON",
@@ -198,6 +198,9 @@ func TestRoutes(t *testing.T) {
 				}
 			}
 			if tt.wantErrorCode != "" {
+				if strings.Contains(rec.Body.String(), `"data"`) {
+					t.Errorf("error body must not use the data envelope: %s", rec.Body.String())
+				}
 				var got errorBody
 				if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 					t.Fatalf("decode error body: %v (body: %s)", err, rec.Body.String())
@@ -258,12 +261,51 @@ func TestEchoTimestampIsUTC(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader(`{"message":"ping"}`))
 	core.NewRouter().ServeHTTP(rec, req)
 
-	var got echoResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+	var body struct {
+		Data echoResponse `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if got.ReceivedAt.IsZero() || got.ReceivedAt.Location().String() != "UTC" {
-		t.Errorf("receivedAt = %v, want a non-zero UTC time", got.ReceivedAt)
+	if body.Data.ReceivedAt.IsZero() || body.Data.ReceivedAt.Location().String() != "UTC" {
+		t.Errorf("receivedAt = %v, want a non-zero UTC time", body.Data.ReceivedAt)
+	}
+}
+
+// Every JSON endpoint returns its payload inside the data envelope, so clients
+// can parse a single shape regardless of the route.
+func TestSuccessResponsesUseTheEnvelope(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "health", method: http.MethodGet, path: "/api/health"},
+		{name: "hello", method: http.MethodGet, path: "/api/hello?name=Go"},
+		{name: "echo", method: http.MethodPost, path: "/api/echo", body: `{"message":"ping"}`},
+	}
+
+	router := core.NewRouter()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body io.Reader
+			if tt.body != "" {
+				body = strings.NewReader(tt.body)
+			}
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, body))
+
+			var got struct {
+				Data json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("decode response: %v (body: %s)", err, rec.Body.String())
+			}
+			if len(got.Data) == 0 || string(got.Data) == "null" {
+				t.Errorf("data envelope is missing: %s", rec.Body.String())
+			}
+		})
 	}
 }
 

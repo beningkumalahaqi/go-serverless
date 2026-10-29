@@ -1,11 +1,14 @@
-// Package core holds the route registry and the response helpers shared by the
-// endpoint files in api/ and the local server in cmd/server.
+// Package core holds the route registry, logging, and the router shared by the
+// endpoint files in api/ and the local server in cmd/server. The HTTP request,
+// response, and error contract lives in lib/.
 package core
 
 import (
 	"net/http"
 	"sort"
 	"strings"
+
+	"haqi/go-serverless/lib"
 )
 
 type route struct {
@@ -69,10 +72,11 @@ func methodNotAllowed(methods []string) http.HandlerFunc {
 	allow := strings.Join(methods, ", ")
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", allow)
-		WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", r.Method+" is not allowed on "+r.URL.Path)
+		lib.WriteError(w, r, lib.NewError(http.StatusMethodNotAllowed, lib.CodeMethodNotAllowed,
+			r.Method+" is not allowed on "+r.URL.Path))
 	}
 }
 
 func notFound(w http.ResponseWriter, r *http.Request) {
-	WriteError(w, http.StatusNotFound, "not_found", "no route for "+r.Method+" "+r.URL.Path)
+	lib.WriteError(w, r, lib.NotFound("no route for "+r.Method+" "+r.URL.Path))
 }
