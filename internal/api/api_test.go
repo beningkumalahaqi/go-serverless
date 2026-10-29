@@ -25,35 +25,35 @@ func TestRoutes(t *testing.T) {
 		{
 			name:         "health",
 			method:       http.MethodGet,
-			path:         "/health",
+			path:         "/api/health",
 			wantStatus:   http.StatusOK,
 			wantContains: `"status":"ok"`,
 		},
 		{
 			name:         "hello defaults to World",
 			method:       http.MethodGet,
-			path:         "/hello",
+			path:         "/api/hello",
 			wantStatus:   http.StatusOK,
 			wantContains: `"message":"Hello, World!"`,
 		},
 		{
 			name:         "hello uses the name parameter",
 			method:       http.MethodGet,
-			path:         "/hello?name=Go",
+			path:         "/api/hello?name=Go",
 			wantStatus:   http.StatusOK,
 			wantContains: `"message":"Hello, Go!"`,
 		},
 		{
 			name:         "hello with an empty name falls back",
 			method:       http.MethodGet,
-			path:         "/hello?name=",
+			path:         "/api/hello?name=",
 			wantStatus:   http.StatusOK,
 			wantContains: `"message":"Hello, World!"`,
 		},
 		{
 			name:         "echo",
 			method:       http.MethodPost,
-			path:         "/echo",
+			path:         "/api/echo",
 			body:         `{"message":"ping"}`,
 			wantStatus:   http.StatusOK,
 			wantContains: `"message":"ping","receivedAt":"`,
@@ -61,7 +61,7 @@ func TestRoutes(t *testing.T) {
 		{
 			name:          "echo rejects malformed JSON",
 			method:        http.MethodPost,
-			path:          "/echo",
+			path:          "/api/echo",
 			body:          `{`,
 			wantStatus:    http.StatusBadRequest,
 			wantErrorCode: "invalid_request",
@@ -69,14 +69,14 @@ func TestRoutes(t *testing.T) {
 		{
 			name:          "echo rejects an empty body",
 			method:        http.MethodPost,
-			path:          "/echo",
+			path:          "/api/echo",
 			wantStatus:    http.StatusBadRequest,
 			wantErrorCode: "invalid_request",
 		},
 		{
 			name:          "echo rejects unknown fields",
 			method:        http.MethodPost,
-			path:          "/echo",
+			path:          "/api/echo",
 			body:          `{"message":"ping","extra":true}`,
 			wantStatus:    http.StatusBadRequest,
 			wantErrorCode: "invalid_request",
@@ -84,7 +84,7 @@ func TestRoutes(t *testing.T) {
 		{
 			name:          "echo rejects a missing message",
 			method:        http.MethodPost,
-			path:          "/echo",
+			path:          "/api/echo",
 			body:          `{}`,
 			wantStatus:    http.StatusBadRequest,
 			wantErrorCode: "invalid_request",
@@ -92,7 +92,7 @@ func TestRoutes(t *testing.T) {
 		{
 			name:          "echo rejects a blank message",
 			method:        http.MethodPost,
-			path:          "/echo",
+			path:          "/api/echo",
 			body:          `{"message":"   "}`,
 			wantStatus:    http.StatusBadRequest,
 			wantErrorCode: "invalid_request",
@@ -100,7 +100,7 @@ func TestRoutes(t *testing.T) {
 		{
 			name:          "echo rejects trailing content",
 			method:        http.MethodPost,
-			path:          "/echo",
+			path:          "/api/echo",
 			body:          `{"message":"ping"}{"message":"pong"}`,
 			wantStatus:    http.StatusBadRequest,
 			wantErrorCode: "invalid_request",
@@ -108,7 +108,7 @@ func TestRoutes(t *testing.T) {
 		{
 			name:          "echo rejects bodies over 1 KB",
 			method:        http.MethodPost,
-			path:          "/echo",
+			path:          "/api/echo",
 			body:          largeBody,
 			wantStatus:    http.StatusRequestEntityTooLarge,
 			wantErrorCode: "payload_too_large",
@@ -123,7 +123,7 @@ func TestRoutes(t *testing.T) {
 		{
 			name:          "wrong method on a GET route",
 			method:        http.MethodPost,
-			path:          "/health",
+			path:          "/api/health",
 			wantStatus:    http.StatusMethodNotAllowed,
 			wantErrorCode: "method_not_allowed",
 			wantAllow:     "GET, HEAD",
@@ -131,7 +131,7 @@ func TestRoutes(t *testing.T) {
 		{
 			name:          "wrong method on the POST route",
 			method:        http.MethodGet,
-			path:          "/echo",
+			path:          "/api/echo",
 			wantStatus:    http.StatusMethodNotAllowed,
 			wantErrorCode: "method_not_allowed",
 			wantAllow:     "POST",
@@ -139,20 +139,20 @@ func TestRoutes(t *testing.T) {
 		{
 			name:       "HEAD on a GET route",
 			method:     http.MethodHead,
-			path:       "/health",
+			path:       "/api/health",
 			wantStatus: http.StatusOK,
 		},
 		{
 			name:         "swagger UI",
 			method:       http.MethodGet,
-			path:         "/docs",
+			path:         "/api/docs",
 			wantStatus:   http.StatusOK,
 			wantContains: "SwaggerUIBundle",
 		},
 		{
 			name:         "openapi document",
 			method:       http.MethodGet,
-			path:         "/openapi.yaml",
+			path:         "/api/openapi.yaml",
 			wantStatus:   http.StatusOK,
 			wantContains: "openapi: 3.0",
 		},
@@ -199,7 +199,7 @@ func TestRoutes(t *testing.T) {
 
 func TestEchoTimestampIsUTC(t *testing.T) {
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(`{"message":"ping"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/echo", strings.NewReader(`{"message":"ping"}`))
 	NewRouter().ServeHTTP(rec, req)
 
 	var got echoResponse
@@ -213,8 +213,8 @@ func TestEchoTimestampIsUTC(t *testing.T) {
 
 func TestDocsContentTypes(t *testing.T) {
 	tests := map[string]string{
-		"/docs":         "text/html; charset=utf-8",
-		"/openapi.yaml": "application/yaml; charset=utf-8",
+		"/api/docs":         "text/html; charset=utf-8",
+		"/api/openapi.yaml": "application/yaml; charset=utf-8",
 	}
 	router := NewRouter()
 	for path, want := range tests {

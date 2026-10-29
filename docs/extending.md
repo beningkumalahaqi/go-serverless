@@ -1,6 +1,6 @@
 # Extending the API
 
-The walkthrough below adds `GET /items/{id}`. It touches every file a new endpoint needs.
+The walkthrough below adds `GET /api/items/{id}`. It touches every file a new endpoint needs.
 
 ## 1. Handler
 
@@ -23,7 +23,7 @@ func item(w http.ResponseWriter, r *http.Request) {
 Add one entry to the `routes` slice in `internal/api/router.go`:
 
 ```go
-{http.MethodGet, "/items/{id}", item},
+{http.MethodGet, "/api/items/{id}", item},
 ```
 
 The router registers the method pattern and a bare pattern for 405 responses automatically. `GET` routes also accept `HEAD`.
@@ -33,7 +33,7 @@ The router registers the method pattern and a bare pattern for 405 responses aut
 Add the path to `docs/openapi.yaml`:
 
 ```yaml
-  /items/{id}:
+  /api/items/{id}:
     get:
       tags: [examples]
       operationId: getItem
@@ -78,7 +78,7 @@ Add a row to the table in `internal/api/api_test.go`:
 {
 	name:         "item",
 	method:       http.MethodGet,
-	path:         "/items/abc123",
+	path:         "/api/items/abc123",
 	wantStatus:   http.StatusOK,
 	wantContains: `"id":"abc123"`,
 },
@@ -91,7 +91,7 @@ Add a failure case too, such as a wrong method returning 405, if the route intro
 Add the request to `examples/requests.http`. In `examples/curl.sh`, use the `expect` helper so the check covers the body, not just a 2xx status:
 
 ```bash
-body=$(curl -fsS "$BASE_URL/items/abc123")
+body=$(curl -fsS "$BASE_URL/api/items/abc123")
 expect item "$body" '"id":"abc123"'
 ```
 
@@ -102,7 +102,7 @@ make test
 make run
 ```
 
-Open `/docs` and confirm the new operation appears and "Try it out" returns the expected response.
+Open `/api/docs` and confirm the new operation appears and "Try it out" returns the expected response.
 
 ## Spec drift checklist
 

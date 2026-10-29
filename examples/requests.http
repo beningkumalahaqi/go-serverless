@@ -1,22 +1,22 @@
 @host = http://localhost:8080
 
 ### Health
-GET {{host}}/health
+GET {{host}}/api/health
 
 ### Hello with the default name
-GET {{host}}/hello
+GET {{host}}/api/hello
 
 ### Hello with a name
-GET {{host}}/hello?name=Go
+GET {{host}}/api/hello?name=Go
 
 ### Echo
-POST {{host}}/echo
+POST {{host}}/api/echo
 Content-Type: application/json
 
 {"message": "ping"}
 
 ### Error shape: missing message
-POST {{host}}/echo
+POST {{host}}/api/echo
 Content-Type: application/json
 
 {}
@@ -25,7 +25,7 @@ Content-Type: application/json
 GET {{host}}/missing
 
 ### OpenAPI document
-GET {{host}}/openapi.yaml
+GET {{host}}/api/openapi.yaml
 
 ### Swagger UI (open in a browser)
-GET {{host}}/docs
+GET {{host}}/api/docs

@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// Functions have no main, so the adapter that imports this package gets the
-// same logger configuration as cmd/server.
+// init configures one logger for every process that imports this package,
+// including cmd/server.
 func init() {
 	level := slog.LevelInfo
 	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {

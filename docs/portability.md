@@ -33,7 +33,7 @@ ENTRYPOINT ["/server"]
 ```bash
 docker build -t go-serverless .
 docker run --rm -p 8080:8080 go-serverless
-curl localhost:8080/health
+curl localhost:8080/api/health
 ```
 
 `cmd/server` reads `PORT`, so every platform below can inject its own value.
@@ -96,5 +96,5 @@ When moving:
 2. Build `./cmd/server` for the target OS and architecture.
 3. Set `PORT` if the platform requires a specific value.
 4. Set `LOG_LEVEL` if you need more or less log volume.
-5. Point health checks at `/health`.
+5. Point health checks at `/api/health`.
 6. Run `examples/curl.sh` against the deployed URL with `BASE_URL` set.

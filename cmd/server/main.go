@@ -23,7 +23,7 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	slog.Info("listening", "url", "http://localhost"+addr, "docs", "http://localhost"+addr+"/docs")
+	slog.Info("listening", "url", "http://localhost"+addr, "docs", "http://localhost"+addr+"/api/docs")
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}

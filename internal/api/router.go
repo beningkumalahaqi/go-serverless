@@ -1,5 +1,5 @@
-// Package api holds the host-agnostic HTTP layer. Adapters call NewRouter and
-// never contain route logic of their own.
+// Package api holds the host-agnostic HTTP layer. cmd/server calls NewRouter
+// and contains no route logic of its own.
 package api
 
 import (
@@ -14,14 +14,14 @@ type route struct {
 }
 
 var routes = []route{
-	{http.MethodGet, "/health", health},
-	{http.MethodGet, "/hello", hello},
-	{http.MethodPost, "/echo", echo},
-	{http.MethodGet, "/docs", docsPage},
-	{http.MethodGet, "/openapi.yaml", openapiSpec},
+	{http.MethodGet, "/api/health", health},
+	{http.MethodGet, "/api/hello", hello},
+	{http.MethodPost, "/api/echo", echo},
+	{http.MethodGet, "/api/docs", docsPage},
+	{http.MethodGet, "/api/openapi.yaml", openapiSpec},
 }
 
-// NewRouter returns the handler shared by every adapter.
+// NewRouter returns the handler served by cmd/server.
 func NewRouter() http.Handler {
 	mux := http.NewServeMux()
 	allowed := make(map[string][]string, len(routes))

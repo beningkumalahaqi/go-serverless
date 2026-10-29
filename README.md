@@ -29,12 +29,12 @@ cd go-serverless
 make run
 ```
 
-Open <http://localhost:8080/docs> for Swagger UI. The same calls without a browser:
+Open <http://localhost:8080/api/docs> for Swagger UI. The same calls without a browser:
 
 ```bash
-curl localhost:8080/health
-curl 'localhost:8080/hello?name=Go'
-curl -X POST localhost:8080/echo \
+curl localhost:8080/api/health
+curl 'localhost:8080/api/hello?name=Go'
+curl -X POST localhost:8080/api/echo \
   -H 'Content-Type: application/json' \
   -d '{"message":"ping"}'
 ```
@@ -54,13 +54,15 @@ Both commands must pass before a change is done.
 
 ## Endpoints
 
+Every route is under `/api`.
+
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | Liveness check |
-| GET | `/hello?name=World` | Greeting, `name` optional |
-| POST | `/echo` | Echo a JSON `message` (max 1 KB) with a UTC timestamp |
-| GET | `/docs` | Swagger UI |
-| GET | `/openapi.yaml` | OpenAPI 3.0.3 document |
+| GET | `/api/health` | Liveness check |
+| GET | `/api/hello?name=World` | Greeting, `name` optional |
+| POST | `/api/echo` | Echo a JSON `message` (max 1 KB) with a UTC timestamp |
+| GET | `/api/docs` | Swagger UI |
+| GET | `/api/openapi.yaml` | OpenAPI 3.0.3 document |
 
 Errors use one shape:
 
@@ -68,7 +70,7 @@ Errors use one shape:
 { "error": { "code": "invalid_request", "message": "message is required" } }
 ```
 
-Status codes: `200`, `400` for bad input, `404` for unknown routes, `405` with an `Allow` header for wrong methods, `413` for a body over 1 KB. Unknown paths, including `/`, return the JSON 404 shape. Open `/docs` for the UI.
+Status codes: `200`, `400` for bad input, `404` for unknown routes, `405` with an `Allow` header for wrong methods, `413` for a body over 1 KB. Unknown paths, including `/` and `/api`, return the JSON 404 shape. Open `/api/docs` for the UI.
 
 ## Deploy to Vercel
 
@@ -153,8 +155,8 @@ See [docs/portability.md](docs/portability.md). Docker, Fly.io, Render, Cloud Ru
 |---|---|
 | Vercel builds a function instead of the server | `vercel.json` must contain `"framework": "go"`, and `cmd/server/main.go` must exist. |
 | Build cannot find the module | `go.mod` must sit at the repository root. |
-| `/docs` is blank | Swagger UI loads from jsDelivr and needs internet access. Vendor `swagger-ui-dist` into `docs/` if the page must work offline. |
-| `/docs` renders but Try it out fails | The spec loads from `/openapi.yaml`. Check that the deployment serves that path and that the browser can reach the deployment URL. |
+| `/api/docs` is blank | Swagger UI loads from jsDelivr and needs internet access. Vendor `swagger-ui-dist` into `docs/` if the page must work offline. |
+| `/api/docs` renders but Try it out fails | The spec loads from `/api/openapi.yaml`. Check that the deployment serves that path and that the browser can reach the deployment URL. |
 | Vercel rejects the Go version | Lower the `go` directive in `go.mod` to a version Vercel supports, such as 1.25. |
 | `make portability` fails | Something in `internal/` or `docs/` grew a third-party import or a Vercel reference. Move host-specific code out of the core. |
 
@@ -164,6 +166,7 @@ See [docs/portability.md](docs/portability.md). Docker, Fly.io, Render, Cloud Ru
 - [Extending the API](docs/extending.md)
 - [Portability](docs/portability.md)
 - [OpenAPI spec](docs/openapi.yaml)
+- [Agent skills](agents/skills/)
 
 ## License
 
