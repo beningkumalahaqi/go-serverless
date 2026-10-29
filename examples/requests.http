@@ -1,0 +1,31 @@
+@host = http://localhost:8080
+
+### Health
+GET {{host}}/health
+
+### Hello with the default name
+GET {{host}}/hello
+
+### Hello with a name
+GET {{host}}/hello?name=Go
+
+### Echo
+POST {{host}}/echo
+Content-Type: application/json
+
+{"message": "ping"}
+
+### Error shape: missing message
+POST {{host}}/echo
+Content-Type: application/json
+
+{}
+
+### Error shape: unknown route
+GET {{host}}/missing
+
+### OpenAPI document
+GET {{host}}/openapi.yaml
+
+### Swagger UI (open in a browser)
+GET {{host}}/docs

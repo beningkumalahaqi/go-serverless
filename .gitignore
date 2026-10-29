@@ -1,0 +1,4 @@
+bin/
+.vercel/
+*.out
+.DS_Store

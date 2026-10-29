@@ -1,0 +1,188 @@
+openapi: 3.0.3
+info:
+  title: Go Serverless API
+  version: 0.1.0
+  description: |
+    A minimal Go HTTP API that runs locally, on Vercel, and on any host that
+    can run a binary. The spec is written by hand and is the source of truth
+    for the routes in internal/api.
+servers:
+  - url: /
+security: []
+tags:
+  - name: examples
+    description: Sample endpoints to copy when adding your own.
+  - name: meta
+    description: Documentation endpoints served by the app itself.
+
+paths:
+  /health:
+    get:
+      tags: [examples]
+      operationId: getHealth
+      summary: Liveness check
+      responses:
+        '200':
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+
+  /hello:
+    get:
+      tags: [examples]
+      operationId: getHello
+      summary: Greet a name from the query string
+      parameters:
+        - name: name
+          in: query
+          required: false
+          description: Name to greet. Defaults to World.
+          schema:
+            type: string
+            default: World
+          example: Go
+      responses:
+        '200':
+          description: Greeting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HelloResponse'
+              example:
+                message: Hello, Go!
+
+  /echo:
+    post:
+      tags: [examples]
+      operationId: postEcho
+      summary: Echo a JSON message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EchoRequest'
+            example:
+              message: ping
+      responses:
+        '200':
+          description: The message, echoed with a server timestamp.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EchoResponse'
+              example:
+                message: ping
+                receivedAt: '2026-01-01T00:00:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+
+  /docs:
+    get:
+      tags: [meta]
+      operationId: getDocs
+      summary: Swagger UI
+      responses:
+        '200':
+          description: HTML page loading Swagger UI from a pinned CDN version.
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /openapi.yaml:
+    get:
+      tags: [meta]
+      operationId: getOpenAPISpec
+      summary: OpenAPI document
+      responses:
+        '200':
+          description: This document.
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+
+    HelloResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: Hello, World!
+
+    EchoRequest:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+          maxLength: 1024
+          example: ping
+
+    EchoResponse:
+      type: object
+      required: [message, receivedAt]
+      properties:
+        message:
+          type: string
+          example: ping
+        receivedAt:
+          type: string
+          format: date-time
+          example: '2026-01-01T00:00:00Z'
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: invalid_request
+            message:
+              type: string
+              example: message is required
+
+  responses:
+    BadRequest:
+      description: The body is not valid JSON, has unknown fields, or fails validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: invalid_request
+              message: message is required
+
+    PayloadTooLarge:
+      description: The body is larger than 1 KB.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: payload_too_large
+              message: body must be at most 1 KB
