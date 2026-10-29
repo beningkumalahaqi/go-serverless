@@ -25,7 +25,9 @@ make test
 
 This runs `go vet ./...` and `go test ./... -race -count=1`. The route test imports `api` for its side effects, so every `init` registration is exercised. A failing row prints the status and body that differed.
 
-`TestHandlersGuardMethods` calls each exported handler directly and asserts the 405 response and `Allow` header, which is the behavior a deployed function relies on.
+`TestHandlersGuardMethods` calls each exported handler directly and asserts the 405 response and `Allow` header, which is the behavior a deployed function relies on. `TestSuccessResponsesUseTheEnvelope` proves every JSON route uses `data`.
+
+`lib/lib_test.go` covers the adapter directly: success envelope, method guard, `*APIError` mapping, plain-error and panic to 500, `DecodeJSON` limits and strictness, query helpers, and non-200 success statuses.
 
 ## 3. Portability
 
@@ -33,7 +35,7 @@ This runs `go vet ./...` and `go test ./... -race -count=1`. The route test impo
 make portability
 ```
 
-The target fails if `api/`, `core/`, or `docs/` imports a third-party module, or if a Go file outside `api/` mentions Vercel. It prints nothing on success.
+The target fails if `api/`, `core/`, `lib/`, or `docs/` imports a third-party module, or if a Go file outside `api/` mentions Vercel. It prints nothing on success.
 
 ## 4. OpenAPI
 
@@ -53,7 +55,7 @@ sleep 2
 BASE_URL=http://localhost:18080 ./examples/curl.sh
 ```
 
-The script asserts response bodies, the echo timestamp, and the 400 error status. It must print `ok` for every check.
+The script asserts response bodies, the data envelope, the error code, the echo timestamp, and the 400 status. It must print `ok` for every check.
 
 ## 6. Negative paths
 
@@ -102,9 +104,10 @@ Open `http://localhost:18080/api/docs` (or the `vercel dev` URL). Confirm:
 
 - All five operations render.
 - Try it out shows a request URL under `/api`.
-- `/api/health` returns `{"status":"ok"}`.
-- `/api/hello?name=Go` returns `{"message":"Hello, Go!"}`.
-- `/api/echo` returns the message and a UTC `receivedAt`.
+- Success examples show `{"data": ...}`.
+- `/api/health` returns `{"data":{"status":"ok"}}`.
+- `/api/hello?name=Go` returns `{"data":{"message":"Hello, Go!"}}`.
+- `/api/echo` returns the message and a UTC `receivedAt` inside `data`.
 
 ## 10. Deployed check
 
@@ -122,8 +125,12 @@ Do not report a deployment as verified without this result.
 |---|---|
 | `make test` fails with 404 | The test imports no `api` package, the `init` registration is missing, or the path does not match the file name. |
 | `make test` fails to compile | Two files export the same handler name, or a file in `api/` exports more than one handler. |
-| `make portability` fails | Third-party import in `api/`, `core/`, or `docs/`, or the word Vercel in a Go file outside `api/`. |
-| `vercel dev` returns 502 | Build failure, often an `internal/` import from `api/`. Read the `vercel dev` terminal output. |
+| `make test` fails in `lib/` | The adapter, decoder, or error mapping changed. Read the assertion; `lib/lib_test.go` names the broken contract. |
+| `make portability` fails | Third-party import in `api/`, `core/`, `lib/`, or `docs/`, or the word Vercel in a Go file outside `api/`. |
+| A JSON response is not wrapped in `data` | The handler bypassed `lib.Handle`, or the route is a raw docs endpoint by design. |
+| A failed request returns 500 instead of 400/404 | The handler returned a plain error where it should return a `lib.BadRequest` or `lib.NotFound` constructor. |
+| The 500 body contains internal details | The handler wrote its own error JSON instead of returning an error to `lib.Handle`. |
+| `vercel dev` returns 502 | Build failure, often an `internal/` import from `api/`, or a panic outside `lib.Handle` such as in `init`. Read the `vercel dev` terminal output. |
 | `vercel build` fails | A function bundle failed. Check for an `internal/` import, a duplicate handler name, or a file that exports no `http.HandlerFunc`. |
 | `vercel build` produces fewer functions than `api/` files | A filename was skipped or the function was not recognized. Confirm `package handler` and one exported handler in that file. |
 | Smoke test gets 404 | The server is running old code, or the path lacks `/api`. |

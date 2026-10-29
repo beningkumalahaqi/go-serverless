@@ -16,7 +16,7 @@ Vercel builds every `.go` file in `api/` as its own function. `vercel.json` disa
 
 With no framework selected, Vercel's zero-config builder maps `api/health.go` to `/api/health` and `api/openapi.yaml.go` to `/api/openapi.yaml`. `cmd/server` is not used.
 
-Each file declares `package handler` and exports exactly one `http.HandlerFunc`. Vercel rejects `package main` when `go.mod` is present, and it picks the first exported handler in each file. The `init` registration is for `cmd/server`; Vercel calls the handler directly.
+Each file declares `package handler` and exports exactly one `http.HandlerFunc`. Vercel rejects `package main` when `go.mod` is present, and it picks the first exported handler in each file. The exported handler calls `lib.Handle`, so method checks, the success envelope, error mapping, and panic recovery work the same as they do locally. The `init` registration is for `cmd/server`; Vercel calls the handler directly.
 
 Vercel's Go runtime is in beta. Mention that when the task is production traffic.
 
@@ -68,14 +68,14 @@ Expected results:
 
 | Request | Result |
 |---|---|
-| `GET /api/health` | `{"status":"ok"}` |
-| `GET /api/hello?name=Go` | `{"message":"Hello, Go!"}` |
-| `POST /api/echo` | message plus a UTC `receivedAt` |
-| `POST /api/echo` with `{}` | 400, `invalid_request` |
+| `GET /api/health` | `{"data":{"status":"ok"}}` |
+| `GET /api/hello?name=Go` | `{"data":{"message":"Hello, Go!"}}` |
+| `POST /api/echo` | message plus a UTC `receivedAt` inside `data` |
+| `POST /api/echo` with `{}` | 400, `invalid_request` inside `error` |
 | `POST /api/health` | 405 with `Allow: GET, HEAD` |
 | `GET /api/echo` | 405 with `Allow: POST` |
-| `GET /api/openapi.yaml` | the spec |
-| `GET /api/docs` | Swagger UI |
+| `GET /api/openapi.yaml` | raw YAML, not the JSON envelope |
+| `GET /api/docs` | raw HTML, not the JSON envelope |
 | `GET /` and `GET /api` | the platform's HTML 404 |
 
 Do not report the deployment as working until the script passes and the 405 checks return the JSON error shape.
@@ -87,10 +87,11 @@ Do not report the deployment as working until the script passes and the 405 chec
 | Every path returns 404 | No function matched. Confirm each file is directly in `api/`, declares `package handler`, and exports a handler. Redeploy. |
 | A new endpoint is missing | The file was added after the last deploy. Redeploy; discovery happens at build time. |
 | Vercel builds a server instead of functions | The Framework Preset is still `go`. Set it to "Other" so `"framework": null` applies. |
-| A function returns 502 `NO_RESPONSE_FROM_FUNCTION` | The function failed to build or panic. Check the build log. Importing `internal/...` from `api/` fails because Vercel rewrites the module to `handler`. |
+| A function returns 502 `NO_RESPONSE_FROM_FUNCTION` | The function failed to build, or it panicked outside `lib.Handle` such as in `init`. Check the build log. Importing `internal/...` from `api/` fails because Vercel rewrites the module to `handler`. |
 | `/api` returns 404 | Expected. There is no `api.go`; the endpoints are files beneath `api/`. |
 | `/api/missing` returns HTML | Expected. Unknown paths never reach a function, so the platform 404 is returned. `cmd/server` is the only place with the JSON catch-all. |
-| Wrong method returns 405 | Correct. Handlers call `core.Allow`. |
+| Wrong method returns 405 | Correct. `lib.Handle` applies the guard. |
+| A JSON success body is missing `data` | The handler bypassed `lib.Handle`. Return the payload instead of writing JSON. |
 | `/api/docs` is blank | Swagger UI loads from jsDelivr and needs internet access. |
 | Try it out fails | The page points at `/api/openapi.yaml`; confirm that file deployed and is reachable. |
 | Build cannot find the module | `go.mod` must sit at the repository root. |
@@ -101,4 +102,5 @@ Do not report the deployment as working until the script passes and the 405 chec
 - Do not add `rewrites` or `routes` to `vercel.json`. The file name is the route.
 - Do not set `"framework": "go"`. That selects server mode and ignores `api/`.
 - Keep the directory flat. Files in subdirectories of `api/` map to different URLs.
+- Keep JSON endpoints behind `lib.Handle` so the envelope and error shape match local runs.
 - Keep Vercel-specific changes limited to `vercel.json` and the deploy section of the README.

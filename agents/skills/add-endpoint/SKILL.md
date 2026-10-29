@@ -1,6 +1,6 @@
 ---
 name: add-endpoint
-description: Add or change an HTTP endpoint in this Go API. Use when adding a file under api/, a handler, validation, response types, tests, OpenAPI paths, or example requests.
+description: Add or change an HTTP endpoint in this Go API. Use when adding a file under api/, a lib.Handle adapter, validation, response types, tests, OpenAPI paths, or example requests.
 ---
 
 # Add an endpoint
@@ -18,6 +18,7 @@ import (
 	"net/http"
 
 	core "haqi/go-serverless/core"
+	"haqi/go-serverless/lib"
 )
 
 func init() {
@@ -29,16 +30,15 @@ type itemResponse struct {
 }
 
 func Items(w http.ResponseWriter, r *http.Request) {
-	if !core.Allow(w, r, http.MethodGet, http.MethodHead) {
-		return
-	}
+	lib.Handle(w, r, items, http.MethodGet, http.MethodHead)
+}
 
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		core.WriteError(w, http.StatusBadRequest, "invalid_request", "id is required")
-		return
+func items(r *http.Request) (any, error) {
+	id, err := lib.RequiredQuery(r, "id")
+	if err != nil {
+		return nil, err
 	}
-	core.WriteJSON(w, http.StatusOK, itemResponse{ID: id})
+	return itemResponse{ID: id}, nil
 }
 ```
 
@@ -49,11 +49,34 @@ Rules:
 - Declare `package handler`.
 - Export exactly one function with the `http.HandlerFunc` signature. Vercel picks the first exported one in the file.
 - Use a handler name that is unique across `api/`. All files compile as one package locally.
-- Call `core.Allow` first. A deployed function receives every method sent to its path.
-- Reuse `core.WriteJSON` and `core.WriteError` so the JSON and error shapes stay consistent.
+- Make the exported handler a thin adapter: `lib.Handle(w, r, logic, methods...)`.
+- Keep the logic function unexported with the signature `func(*http.Request) (any, error)`. It must not take or use `http.ResponseWriter`.
+- Return the success payload as `any`; `lib.Handle` writes `{"data": ...}` with a 200.
+- Use `lib.HandleStatus(w, r, http.StatusCreated, logic, methods...)` for another 2xx status. A 204 writes no body.
+- Return `lib.BadRequest`, `lib.NotFound`, and the other `lib` constructors for expected failures. Never call `http.Error` or write error JSON by hand.
+- Return a plain or wrapped error for unexpected failures; the adapter turns it into a logged 500.
 - Keep anything that `api/` imports outside `internal/`; Vercel rewrites the module and rejects internal imports.
 
-For JSON bodies, copy the `Echo` handler in `api/echo.go`: cap the body with `http.MaxBytesReader`, decode with `DisallowUnknownFields`, reject trailing content, then validate fields.
+For JSON bodies, use the shared decoder:
+
+```go
+func createItem(r *http.Request) (any, error) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := lib.DecodeJSON(r, &req, 1<<10); err != nil {
+		return nil, err
+	}
+	if req.Name == "" {
+		return nil, lib.BadRequest("name is required")
+	}
+	return itemResponse{ID: req.Name}, nil
+}
+```
+
+`lib.DecodeJSON` caps the body, rejects unknown fields, rejects trailing values, and returns `*APIError` values ready for the adapter. Pass a positive limit; `0` means `lib.DefaultMaxBodyBytes` (1 MiB).
+
+Use `lib.Query(r, "name", "World")` for an optional query parameter and `lib.RequiredQuery(r, "id")` for a required one.
 
 Dynamic segments such as `/api/items/{id}` do not populate `r.PathValue` on Vercel. Read the id from the query string or parse `r.URL.Path`.
 
@@ -67,7 +90,7 @@ Add rows to the table in `core/api_test.go`. The test package imports `api` for 
 	method:       http.MethodGet,
 	path:         "/api/items?id=abc123",
 	wantStatus:   http.StatusOK,
-	wantContains: `"id":"abc123"`,
+	wantContains: `"data":{"id":"abc123"}`,
 },
 ```
 
@@ -77,9 +100,13 @@ Add the handler to `TestHandlersGuardMethods` so the wrong-method guard is cover
 {"items", handler.Items, http.MethodPost, "GET, HEAD"},
 ```
 
+The success assertion includes the `data` envelope, so a regression in the shared response contract fails the route test.
+
+`lib/lib_test.go` covers the shared adapter, decoder, and error mapping. Touch it only when changing `lib/` itself.
+
 ## 3. Spec
 
-Add the path to `docs/openapi.yaml` with every status the handler can return. Reuse `#/components/responses/BadRequest` and `#/components/responses/MethodNotAllowed`.
+Add the path to `docs/openapi.yaml` with every status the handler can return. Reuse `#/components/responses/BadRequest`, `MethodNotAllowed`, and `InternalError`.
 
 ```yaml
   /api/items:
@@ -102,23 +129,30 @@ Add the path to `docs/openapi.yaml` with every status the handler can return. Re
               schema:
                 $ref: '#/components/schemas/ItemResponse'
               example:
-                id: abc123
+                data:
+                  id: abc123
         '400':
           $ref: '#/components/responses/BadRequest'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
 ```
 
-Add the schema under `components/schemas`:
+Add the schema under `components/schemas`. It describes the envelope, not just the payload:
 
 ```yaml
     ItemResponse:
       type: object
-      required: [id]
+      required: [data]
       properties:
-        id:
-          type: string
-          example: abc123
+        data:
+          type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              example: abc123
 ```
 
 ## 4. Examples
@@ -127,7 +161,8 @@ Add the request to `examples/requests.http`. In `examples/curl.sh`, use the `exp
 
 ```bash
 body=$(curl -fsS "$BASE_URL/api/items?id=abc123")
-expect item "$body" '"id":"abc123"'
+expect item "$body" '"data":{'
+expect item-id "$body" '"id":"abc123"'
 ```
 
 ## 5. Verify
@@ -164,7 +199,8 @@ Open `http://localhost:18080/api/docs` and confirm the operation appears and Try
 
 ## Rules
 
-- Keep shared code stdlib-only. No new dependency belongs in `api/`, `core/`, or `docs/`.
+- Keep shared code stdlib-only. No new dependency belongs in `api/`, `core/`, `lib/`, or `docs/`.
 - Do not add a route outside `/api`.
 - Do not add a central route table. The `init` call in the endpoint file is the registration.
+- Do not bypass `lib.Handle` for a JSON endpoint. If a handler writes its own JSON, the envelope and error contract stop being uniform.
 - Keep the spec and the handler in sync. `docs/extending.md` has the full drift checklist.
